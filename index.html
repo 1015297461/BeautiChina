@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>中国传统村落地图 - 共8170个古村落</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<!-- MarkerCluster CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  width: 100vw; height: 100vh; overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#map { width:100%; height:100%; z-index:1; }
+
+/* 顶部标题栏 */
+#topbar {
+  position: fixed; top:0; left:0; right:0; z-index:1000;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  color: #fff; padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  flex-wrap: wrap; gap: 8px;
+}
+#topbar .title {
+  font-size: 1.2rem; font-weight: bold;
+  white-space: nowrap;
+  display: flex; align-items: center; gap: 8px;
+}
+#topbar .title .icon { font-size: 1.5rem; }
+
+#topbar .stats {
+  display: flex; gap: 16px; font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+#topbar .stats span { white-space: nowrap; opacity: 0.9; }
+#topbar .stats strong { color: #f0c040; }
+
+/* 侧边栏 */
+#sidebar {
+  position: fixed; top: 80px; left: 12px; bottom: 12px; z-index:999;
+  width: 300px; max-width: calc(100vw - 24px);
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+  border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  display: flex; flex-direction: column;
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+#sidebar.collapsed { transform: translateX(-110%); }
+
+/* 侧边栏切换按钮 */
+#sidebar-toggle {
+  position: fixed; top: 90px; z-index:1001;
+  width: 36px; height: 36px; background: white; border: none;
+  border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  font-size: 1.2rem; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  transition: left 0.3s ease;
+}
+#sidebar-toggle.open { left: 318px; }
+#sidebar-toggle.closed { left: 12px; }
+
+/* 搜索框 */
+#search-box {
+  padding: 12px; border-bottom: 1px solid #eee;
+}
+#search-box input {
+  width: 100%; padding: 10px 14px; border: 2px solid #e0e0e0;
+  border-radius: 8px; font-size: 0.95rem;
+  outline: none; transition: border-color 0.2s;
+}
+#search-box input:focus { border-color: #0f3460; }
+
+/* 过滤器 */
+#filters {
+  padding: 12px; border-bottom: 1px solid #eee;
+  overflow-y: auto; max-height: 200px;
+}
+#filters h4 {
+  font-size: 0.85rem; color: #666; margin-bottom: 8px;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+#filters .filter-group {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px;
+}
+#filters .chip {
+  padding: 4px 10px; border-radius: 16px;
+  font-size: 0.8rem; cursor: pointer;
+  border: 1px solid #ddd; background: #f8f8f8;
+  transition: all 0.2s; white-space: nowrap;
+}
+#filters .chip:hover { border-color: #0f3460; background: #e8f0fe; }
+#filters .chip.active { background: #0f3460; color: white; border-color: #0f3460; }
+
+/* 统计列表 */
+#stats-list {
+  flex: 1; overflow-y: auto; padding: 12px;
+}
+#stats-list h4 {
+  font-size: 0.85rem; color: #666; margin-bottom: 8px;
+  text-transform: uppercase; letter-spacing: 1px;
+  position: sticky; top:0; background: white; padding: 4px 0; z-index:1;
+}
+#stats-list .stat-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  font-size: 0.85rem; transition: background 0.15s;
+}
+#stats-list .stat-item:hover { background: #f0f4f8; }
+#stats-list .stat-item .name { color: #333; }
+#stats-list .stat-item .count {
+  background: #0f3460; color: white; padding: 2px 8px;
+  border-radius: 10px; font-size: 0.8rem; min-width: 28px;
+  text-align: center;
+}
+#stats-list .stat-item .count.highlight { background: #e74c3c; }
+
+/* 图例按钮 */
+#legend-btn {
+  position: fixed; bottom: 24px; right: 12px; z-index: 1001;
+  width: 40px; height: 40px; background: white; border: none;
+  border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  cursor: pointer; font-size: 1.1rem;
+}
+#legend-panel {
+  position: fixed; bottom: 72px; right: 12px; z-index: 1001;
+  background: white; border-radius: 10px; padding: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  font-size: 0.82rem; display: none; min-width: 160px;
+}
+#legend-panel.visible { display: block; }
+#legend-panel .legend-item {
+  display: flex; align-items: center; gap: 8px; margin: 4px 0;
+}
+
+/* 地图图层切换 */
+#layer-switch {
+  position: fixed; bottom: 24px; left: 12px; z-index: 1001;
+  display: flex; gap: 4px;
+}
+#layer-switch button {
+  padding: 8px 12px; border: none; border-radius: 6px;
+  background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  cursor: pointer; font-size: 0.8rem; transition: all 0.2s;
+}
+#layer-switch button.active { background: #0f3460; color: white; }
+
+/* 弹出窗自定义 */
+.village-popup { font-size: 0.85rem; line-height: 1.5; }
+.village-popup h4 { margin: 0 0 6px; color: #0f3460; font-size: 1rem; }
+.village-popup .meta { color: #888; font-size: 0.75rem; }
+.village-popup .batch-tag {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 0.7rem; color: white; margin-top: 4px;
+}
+.batch-1 { background: #e74c3c; }
+.batch-2 { background: #e67e22; }
+.batch-3 { background: #f1c40f; color: #333; }
+.batch-4 { background: #2ecc71; }
+.batch-5 { background: #3498db; }
+.batch-6 { background: #9b59b6; }
+
+/* 加载提示 */
+#loading {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  z-index: 2000; background: white; padding: 24px 32px; border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2); text-align: center;
+}
+#loading .spinner {
+  width: 40px; height: 40px; border: 4px solid #e0e0e0;
+  border-top-color: #0f3460; border-radius: 50%;
+  animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  #topbar { padding: 8px 10px; }
+  #topbar .title { font-size: 1rem; }
+  #topbar .stats { gap: 8px; font-size: 0.72rem; }
+  #topbar .stats .desktop-only { display: none; }
+
+  #sidebar {
+    top: 60px; left: 0; bottom: 0;
+    width: 100vw; max-width: 100vw;
+    border-radius: 0; z-index: 998;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  }
+  #sidebar.collapsed { transform: translateX(0) translateY(100%); }
+  #sidebar.open-mobile { transform: translateY(0); }
+
+  #sidebar-toggle {
+    top: 72px; left: 8px;
+    width: 32px; height: 32px; font-size: 1rem;
+  }
+  #sidebar-toggle.open { left: 8px; }
+
+  #legend-btn { bottom: 16px; right: 8px; width: 36px; height: 36px; }
+  #legend-panel { bottom: 60px; right: 8px; }
+
+  #layer-switch { bottom: 16px; left: 8px; }
+  #layer-switch button { padding: 6px 10px; font-size: 0.72rem; }
+
+  .leaflet-control-zoom { display: none; } /* 使用手势缩放 */
+}
+
+@media (max-width: 400px) {
+  #topbar .stats { display: none; }
+  #topbar .title { font-size: 0.9rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- 加载提示 -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>正在加载 8,170 个古村落数据...</p>
+</div>
+
+<!-- 顶部栏 -->
+<div id="topbar">
+  <div class="title">
+    <span class="icon">🏘️</span>
+    <span>中国传统村落地图</span>
+  </div>
+  <div class="stats">
+    <span>村落: <strong id="stat-total">8,170</strong></span>
+    <span class="desktop-only">|</span>
+    <span>省份: <strong id="stat-provinces">31</strong></span>
+    <span class="desktop-only">|</span>
+    <span>当前视野: <strong id="stat-current">-</strong></span>
+  </div>
+</div>
+
+<!-- 侧边栏切换按钮 -->
+<button id="sidebar-toggle" class="open" title="显示/隐藏面板">☰</button>
+
+<!-- 侧边栏 -->
+<div id="sidebar">
+  <!-- 搜索 -->
+  <div id="search-box">
+    <input type="search" id="search-input" placeholder="🔍 搜索村落、省份、城市...">
+  </div>
+
+  <!-- 批次筛选 -->
+  <div id="filters">
+    <h4>📋 批次筛选</h4>
+    <div class="filter-group" id="batch-filters">
+      <span class="chip active" data-batch="all">全部</span>
+      <span class="chip batch-1" data-batch="1">第1批</span>
+      <span class="chip batch-2" data-batch="2">第2批</span>
+      <span class="chip batch-3" data-batch="3">第3批</span>
+      <span class="chip batch-4" data-batch="4">第4批</span>
+      <span class="chip batch-5" data-batch="5">第5批</span>
+      <span class="chip batch-6" data-batch="6">第6批</span>
+    </div>
+  </div>
+
+  <!-- 省份统计 -->
+  <div id="stats-list">
+    <h4>📊 各省村落数量</h4>
+    <div id="province-stats"></div>
+  </div>
+</div>
+
+<!-- 图例 -->
+<button id="legend-btn" title="图例">🎨</button>
+<div id="legend-panel">
+  <div class="legend-item"><span style="color:#e74c3c">●</span> 第1批 (645)</div>
+  <div class="legend-item"><span style="color:#e67e22">●</span> 第2批 (915)</div>
+  <div class="legend-item"><span style="color:#f1c40f">●</span> 第3批 (994)</div>
+  <div class="legend-item"><span style="color:#2ecc71">●</span> 第4批 (1,598)</div>
+  <div class="legend-item"><span style="color:#3498db">●</span> 第5批 (2,666)</div>
+  <div class="legend-item"><span style="color:#9b59b6">●</span> 第6批 (1,352)</div>
+</div>
+
+<!-- 图层切换 -->
+<div id="layer-switch">
+  <button class="active" data-layer="0">标准地图</button>
+  <button data-layer="1">卫星影像</button>
+  <button data-layer="2">暗色主题</button>
+</div>
+
+<!-- 地图容器 -->
+<div id="map"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- MarkerCluster JS -->
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<!-- 村落数据 -->
+<script src="villages_data.js"></script>
+
+<script>
+(function() {
+// ========== 初始化 ==========
+const map = L.map('map', {
+  center: [35.8, 104.5], // 中国中心位置
+  zoom: 5,
+  minZoom: 3,
+  maxZoom: 18,
+  zoomControl: window.innerWidth > 768, // 桌面端显示缩放按钮
+  attributionControl: true
+});
+
+// 瓦片图层定义
+const tileLayers = [
+  // 标准地图 - 使用高德地图瓦片(中文标注)
+  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+    subdomains: '1234',
+    attribution: '© 高德地图 | 村落数据来源: 中国传统村落名录',
+    maxZoom: 18
+  }),
+  // 卫星影像
+  L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
+    subdomains: '1234',
+    attribution: '© 高德地图',
+    maxZoom: 18
+  }),
+  // 暗色主题 (CartoDB dark)
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© CartoDB | 村落数据来源: 中国传统村落名录',
+    maxZoom: 18
+  })
+];
+
+let currentLayer = 0;
+tileLayers[currentLayer].addTo(map);
+
+// ========== 数据准备 ==========
+const allVillages = window.VILLAGES_DATA || [];
+let activeFilter = 'all';
+let searchQuery = '';
+
+// 省份颜色映射(用于区分)
+const provinceColors = {};
+const PROVINCE_COLORS_POOL = [
+  '#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6',
+  '#1abc9c','#e91e63','#00bcd4','#ff5722','#795548','#607d8b',
+  '#8bc34a','#ff9800','#03a9f4','#cddc39','#673ab7','#009688',
+  '#ff6f00','#2962ff','#c51162','#00bfa5','#64dd17','#aa00ff',
+  '#dd2c00','#304ffe','#00695c','#bf360c','#1a237e','#b71c1c',
+  '#4a148c','#004d40'
+];
+
+// 批次颜色
+const BATCH_COLORS = {
+  1: '#e74c3c', 2: '#e67e22', 3: '#f1c40f',
+  4: '#2ecc71', 5: '#3498db', 6: '#9b59b6'
+};
+
+// 分配省份颜色
+const uniqueProvinces = [...new Set(allVillages.map(v => v.p))];
+uniqueProvinces.forEach((p, i) => {
+  provinceColors[p] = PROVINCE_COLORS_POOL[i % PROVINCE_COLORS_POOL.length];
+});
+
+// ========== MarkerCluster 配置 ==========
+const markerClusterGroup = L.markerClusterGroup({
+  maxClusterRadius: function(zoom) {
+    // 不同缩放级别使用不同聚合半径
+    if (zoom <= 5) return 100;  // 国家级别 - 大聚合
+    if (zoom <= 8) return 60;   // 省级别
+    if (zoom <= 11) return 40;  // 市级别
+    return 30;                   // 区县级
+  },
+  spiderfyOnMaxZoom: true,
+  showCoverageOnHover: false,
+  zoomToBoundsOnClick: true,
+  // 自定义聚合图标
+  iconCreateFunction: function(cluster) {
+    const count = cluster.getChildCount();
+    const markers = cluster.getAllChildMarkers();
+
+    // 统计该聚合中各批次数量
+    const batchCounts = {};
+    markers.forEach(m => {
+      const b = m.options.batch || 1;
+      batchCounts[b] = (batchCounts[b] || 0) + 1;
+    });
+
+    // 根据数量选择尺寸
+    let size = 'small';
+    if (count >= 1000) size = 'xl';
+    else if (count >= 100) size = 'large';
+    else if (count >= 10) size = 'medium';
+
+    const sizeMap = { small: 36, medium: 44, large: 52, xl: 62 };
+    const s = sizeMap[size];
+
+    // 创建自定义HTML图标
+    return L.divIcon({
+      html: `<div style="
+        width:${s}px;height:${s}px;
+        background:linear-gradient(135deg,#1a1a2e,#0f3460);
+        border:3px solid #f0c040;
+        border-radius:50%;
+        display:flex;align-items:center;justify-content:center;
+        color:white;font-weight:bold;font-size:${s > 45 ? 14 : 12}px;
+        box-shadow:0 2px 8px rgba(0,0,0,0.3);
+        cursor:pointer;
+      ">${count >= 1000 ? (count/1000).toFixed(1)+'k' : count}</div>`,
+      className: 'custom-cluster',
+      iconSize: [s, s]
+    });
+  },
+  // 禁用聚合的spiderfy动画（移动端性能优化）
+  disableClusteringAtZoom: 16
+});
+
+// ========== 创建标记 ==========
+function createMarker(village) {
+  const batch = village.b || 1;
+  const color = BATCH_COLORS[batch] || '#e74c3c';
+
+  const marker = L.circleMarker([village.lat, village.lng], {
+    radius: window.innerWidth <= 768 ? 6 : 5,
+    fillColor: color,
+    color: '#fff',
+    weight: 1.5,
+    opacity: 1,
+    fillOpacity: 0.85,
+    batch: batch,
+    province: village.p,
+    city: village.c,
+    villageData: village
+  });
+
+  // 弹出窗
+  const batchNames = {
+    1: '第一批', 2: '第二批', 3: '第三批',
+    4: '第四批', 5: '第五批', 6: '第六批'
+  };
+
+  marker.bindPopup(`
+    <div class="village-popup">
+      <h4>${village.n || village.d || village.f}</h4>
+      <div class="meta">📍 ${village.f}</div>
+      <div class="meta">🏛️ ${village.p} · ${village.c || ''} · ${village.d || ''}</div>
+      <span class="batch-tag batch-${batch}">${batchNames[batch] || '第'+batch+'批'}</span>
+    </div>
+  `, { maxWidth: 300 });
+
+  return marker;
+}
+
+// 创建所有标记
+console.time('创建标记');
+const allMarkers = allVillages.map(v => createMarker(v));
+console.timeEnd('创建标记');
+
+// 添加标记到cluster图层
+console.time('添加到地图');
+markerClusterGroup.addLayers(allMarkers);
+map.addLayer(markerClusterGroup);
+console.timeEnd('添加到地图');
+
+// ========== 缩放事件：更新当前视野统计 ==========
+let updateTimer;
+map.on('zoomend moveend', function() {
+  clearTimeout(updateTimer);
+  updateTimer = setTimeout(updateViewStats, 200);
+});
+
+function updateViewStats() {
+  const bounds = map.getBounds();
+  const zoom = map.getZoom();
+
+  // 统计当前视野内的村落数量
+  let inView = 0;
+  const viewProvinces = new Set();
+
+  // 采样统计(每10个取1个以提高性能)
+  const step = Math.max(1, Math.floor(allVillages.length / 500));
+  for (let i = 0; i < allVillages.length; i += step) {
+    const v = allVillages[i];
+    if (bounds.contains([v.lat, v.lng])) {
+      inView++;
+      if (v.p) viewProvinces.add(v.p);
+    }
+  }
+
+  // 估算总数
+  const estimated = Math.round(inView * step);
+
+  let desc;
+  if (zoom <= 5) desc = `全国 · ${estimated.toLocaleString()}个村落`;
+  else if (zoom <= 8) desc = `${viewProvinces.size}个省份 · 约${estimated.toLocaleString()}个村落`;
+  else if (zoom <= 11) desc = `市级范围 · 约${estimated.toLocaleString()}个村落`;
+  else desc = `区县范围 · 约${estimated.toLocaleString()}个村落`;
+
+  document.getElementById('stat-current').textContent = desc;
+}
+
+// ========== 搜索功能(防抖) ==========
+let searchDebounceTimer;
+document.getElementById('search-input').addEventListener('input', function(e) {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    searchQuery = e.target.value.trim().toLowerCase();
+    applyFilters();
+  }, 250); // 250ms防抖
+});
+
+// ========== 批次筛选 ==========
+document.getElementById('batch-filters').addEventListener('click', function(e) {
+  if (e.target.classList.contains('chip')) {
+    // 更新active状态
+    this.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    e.target.classList.add('active');
+    activeFilter = e.target.dataset.batch;
+    applyFilters();
+  }
+});
+
+function applyFilters() {
+  const filtered = [];
+
+  allMarkers.forEach(marker => {
+    const v = marker.options.villageData;
+    let visible = true;
+
+    // 批次筛选
+    if (activeFilter !== 'all' && String(v.b) !== activeFilter) {
+      visible = false;
+    }
+
+    // 搜索筛选
+    if (searchQuery && visible) {
+      const searchStr = [v.n, v.f, v.p, v.c, v.d, v.t].filter(Boolean).join(' ').toLowerCase();
+      if (!searchStr.includes(searchQuery)) {
+        visible = false;
+      }
+    }
+
+    if (visible) filtered.push(marker);
+  });
+
+  // 使用clearLayers + addLayers重建
+  markerClusterGroup.clearLayers();
+  markerClusterGroup.addLayers(filtered);
+
+  // 更新统计
+  document.getElementById('stat-total').textContent = (filtered.length).toLocaleString();
+
+  // 更新省份统计
+  updateProvinceStats(filtered);
+}
+
+function updateProvinceStats(visibleMarkers) {
+  const counts = {};
+  visibleMarkers.forEach(m => {
+    const p = m.options.province || '未知';
+    counts[p] = (counts[p] || 0) + 1;
+  });
+
+  const container = document.getElementById('province-stats');
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+  container.innerHTML = sorted.map(([prov, cnt]) => {
+    const color = provinceColors[prov] || '#999';
+    return `
+      <div class="stat-item" data-province="${prov}">
+        <span class="name">
+          <span style="color:${color};margin-right:4px;">●</span>${prov}
+        </span>
+        <span class="count">${cnt}</span>
+      </div>
+    `;
+  }).join('');
+
+  // 点击省份定位
+  container.querySelectorAll('.stat-item').forEach(item => {
+    item.addEventListener('click', function() {
+      const prov = this.dataset.province;
+      // 找到该省份的第一个村落来定位
+      const marker = visibleMarkers.find(m => m.options.province === prov);
+      if (marker) {
+        const latlng = marker.getLatLng();
+        map.setView(latlng, 8, { animate: true });
+      }
+    });
+  });
+}
+
+// ========== 侧边栏切换(移动端) ==========
+const sidebar = document.getElementById('sidebar');
+const toggleBtn = document.getElementById('sidebar-toggle');
+let sidebarOpen = true;
+
+toggleBtn.addEventListener('click', function() {
+  if (window.innerWidth <= 768) {
+    // 移动端：底部弹出
+    sidebar.classList.toggle('open-mobile');
+    sidebarOpen = !sidebarOpen;
+    this.textContent = sidebar.classList.contains('open-mobile') ? '✕' : '☰';
+  } else {
+    // 桌面端：侧边滑出
+    sidebar.classList.toggle('collapsed');
+    sidebarOpen = !sidebarOpen;
+    this.classList.toggle('open', !sidebar.classList.contains('collapsed'));
+    this.classList.toggle('closed', sidebar.classList.contains('collapsed'));
+    this.textContent = sidebar.classList.contains('collapsed') ? '▶' : '☰';
+  }
+});
+
+// 移动端 - 点击地图时关闭侧边栏
+if (window.innerWidth <= 768) {
+  map.on('click', function() {
+    if (sidebar.classList.contains('open-mobile')) {
+      sidebar.classList.remove('open-mobile');
+      toggleBtn.textContent = '☰';
+    }
+  });
+}
+
+// 窗口大小变化时更新侧边栏状态
+window.addEventListener('resize', function() {
+  if (window.innerWidth <= 768) {
+    sidebar.classList.remove('collapsed');
+    toggleBtn.classList.remove('open', 'closed');
+    if (!sidebar.classList.contains('open-mobile')) {
+      toggleBtn.textContent = '☰';
+    }
+  } else {
+    sidebar.classList.remove('open-mobile');
+    if (!sidebarOpen) {
+      sidebar.classList.add('collapsed');
+      toggleBtn.classList.add('closed');
+      toggleBtn.textContent = '▶';
+    }
+  }
+});
+
+// ========== 图例切换 ==========
+document.getElementById('legend-btn').addEventListener('click', function() {
+  document.getElementById('legend-panel').classList.toggle('visible');
+});
+
+// ========== 图层切换 ==========
+document.getElementById('layer-switch').addEventListener('click', function(e) {
+  if (e.target.tagName === 'BUTTON') {
+    const idx = parseInt(e.target.dataset.layer);
+    if (idx !== currentLayer) {
+      map.removeLayer(tileLayers[currentLayer]);
+      tileLayers[idx].addTo(map);
+      currentLayer = idx;
+
+      // 更新按钮状态
+      this.querySelectorAll('button').forEach((b, i) => {
+        b.classList.toggle('active', i === idx);
+      });
+    }
+  }
+});
+
+// ========== 初始化统计 ==========
+updateViewStats();
+updateProvinceStats(allMarkers);
+
+// ========== 隐藏加载提示 ==========
+setTimeout(function() {
+  const loading = document.getElementById('loading');
+  if (loading) {
+    loading.style.opacity = '0';
+    loading.style.transition = 'opacity 0.3s';
+    setTimeout(() => loading.remove(), 300);
+  }
+}, 800);
+
+// ========== 键盘快捷键 ==========
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'f' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    document.getElementById('search-input').focus();
+  }
+});
+
+console.log('✅ 中国传统村落地图加载完成！');
+console.log('   📍 ' + allVillages.length.toLocaleString() + ' 个古村落');
+console.log('   🗺️  缩放地图查看不同层级的聚合统计');
+console.log('   🔍 Ctrl+F / Cmd+F 搜索');
+console.log('   📱 支持手机/iPad触屏操作');
+
+})();
+</script>
+</body>
+</html>

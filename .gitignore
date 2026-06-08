@@ -1,0 +1,21 @@
+# 大型地理数据文件（仅用于坐标匹配脚本的输入，不需要上传）
+ok_geo.csv
+ok_data_level3.csv
+ok_data_level4.csv
+county_data.7z
+geo_data.7z
+
+# 冗余数据文件
+villages_data.json
+
+# 数据文档
+*.txt
+
+# Python
+__pycache__/
+*.pyc
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
