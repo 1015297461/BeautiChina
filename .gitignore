@@ -1,3 +1,10 @@
+# API密钥(敏感信息)
+API.md
+api.md
+
+# 备份文件
+BCOld.xlsx
+
 # 大型地理数据文件（仅用于坐标匹配脚本的输入，不需要上传）
 ok_geo.csv
 ok_data_level3.csv

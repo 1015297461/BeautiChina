@@ -422,21 +422,46 @@ const markerClusterGroup = L.markerClusterGroup({
 });
 
 // ========== 创建标记 ==========
+// 使用L.circleMarker：精确坐标=大实心圆+白边，近似坐标=小空心环
 function createMarker(village) {
   const batch = village.b || 1;
   const color = BATCH_COLORS[batch] || '#e74c3c';
+  const isPrecise = village.s === 'amap_api';
+  const zoom = map.getZoom();
+
+  let radius, weight, fillOpacity, strokeColor;
+
+  if (isPrecise) {
+    // 精确坐标：越近越大，实心圆 + 白色粗边框
+    if (zoom <= 7)      { radius = 6;  weight = 2; }    // 远: 小(多聚合)
+    else if (zoom <= 9) { radius = 9;  weight = 2.5; }  // 中
+    else if (zoom <= 11){ radius = 12; weight = 3; }    // 近
+    else                { radius = 15; weight = 3.5; }  // 很近: 大
+    fillOpacity = 0.82;
+    strokeColor = '#fff';
+  } else {
+    // 近似坐标：越近越大，空心环
+    if (zoom <= 7)      { radius = 3;  weight = 1.5; }
+    else if (zoom <= 9) { radius = 5;  weight = 2; }
+    else if (zoom <= 11){ radius = 7;  weight = 2; }
+    else                { radius = 9;  weight = 2.5; }
+    fillOpacity = 0.12;
+    strokeColor = color;
+  }
 
   const marker = L.circleMarker([village.lat, village.lng], {
-    radius: window.innerWidth <= 768 ? 6 : 5,
+    radius: radius,
     fillColor: color,
-    color: '#fff',
-    weight: 1.5,
-    opacity: 1,
-    fillOpacity: 0.85,
+    fillOpacity: fillOpacity,
+    color: strokeColor,
+    weight: weight,
+    opacity: isPrecise ? 1 : 0.45,
+    // 自定义属性(不参与Leaflet渲染)
     batch: batch,
     province: village.p,
     city: village.c,
-    villageData: village
+    villageData: village,
+    isPrecise: isPrecise
   });
 
   // 弹出窗
@@ -445,12 +470,17 @@ function createMarker(village) {
     4: '第四批', 5: '第五批', 6: '第六批'
   };
 
+  const precisionLabel = isPrecise
+    ? '<span style="color:#27ae60;font-size:0.75rem;">📍 高德精确定位</span>'
+    : '<span style="color:#e67e22;font-size:0.75rem;">⚠️ 区县近似(待更新)</span>';
+
   marker.bindPopup(`
     <div class="village-popup">
       <h4>${village.n || village.d || village.f}</h4>
       <div class="meta">📍 ${village.f}</div>
       <div class="meta">🏛️ ${village.p} · ${village.c || ''} · ${village.d || ''}</div>
       <span class="batch-tag batch-${batch}">${batchNames[batch] || '第'+batch+'批'}</span>
+      ${precisionLabel}
     </div>
   `, { maxWidth: 300 });
 
@@ -467,6 +497,40 @@ console.time('添加到地图');
 markerClusterGroup.addLayers(allMarkers);
 map.addLayer(markerClusterGroup);
 console.timeEnd('添加到地图');
+
+// ========== 缩放自适应：更新标记大小 ==========
+let currentZoom = map.getZoom();
+map.on('zoomend', function() {
+  const newZoom = map.getZoom();
+  const oldLevel = getZoomLevel(currentZoom);
+  const newLevel = getZoomLevel(newZoom);
+  if (oldLevel !== newLevel) {
+    currentZoom = newZoom;
+    allMarkers.forEach(marker => {
+      const isPrecise = marker.options.isPrecise;
+      let radius, weight;
+      if (isPrecise) {
+        if (newZoom <= 7)      { radius = 6;  weight = 2; }
+        else if (newZoom <= 9) { radius = 9;  weight = 2.5; }
+        else if (newZoom <= 11){ radius = 12; weight = 3; }
+        else                   { radius = 15; weight = 3.5; }
+      } else {
+        if (newZoom <= 7)      { radius = 3;  weight = 1.5; }
+        else if (newZoom <= 9) { radius = 5;  weight = 2; }
+        else if (newZoom <= 11){ radius = 7;  weight = 2; }
+        else                   { radius = 9;  weight = 2.5; }
+      }
+      marker.setStyle({ radius: radius, weight: weight });
+    });
+  }
+});
+
+function getZoomLevel(zoom) {
+  if (zoom <= 7) return 'far';
+  if (zoom <= 9) return 'mid';
+  if (zoom <= 11) return 'near';
+  return 'close';
+}
 
 // ========== 缩放事件：更新当前视野统计 ==========
 let updateTimer;

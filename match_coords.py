@@ -187,10 +187,13 @@ def main():
             lon, lat = add_random_jitter(lon, lat, v['full_address'], 0.005)
             v['longitude'] = round(lon, 6)
             v['latitude'] = round(lat, 6)
+            v['geocode_source'] = 'county_center'  # 标注来源：区县中心近似坐标
+            v['geocode_level'] = 'district'
             matched += 1
         else:
             v['longitude'] = None
             v['latitude'] = None
+            v['geocode_source'] = 'unmatched'
             unmatched += 1
             if len(unmatched_samples) < 20:
                 unmatched_samples.append(v)
