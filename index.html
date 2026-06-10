@@ -144,6 +144,39 @@ body {
   display: flex; align-items: center; gap: 8px; margin: 4px 0;
 }
 
+/* 定位按钮 */
+#locate-btn {
+  position: fixed; bottom: 24px; right: 60px; z-index: 1001;
+  width: 40px; height: 40px; background: white; border: none;
+  border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  cursor: pointer; font-size: 1.1rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s;
+}
+#locate-btn:active { transform: scale(0.92); }
+#locate-btn.locating { animation: locate-pulse 1s ease-in-out infinite; }
+@keyframes locate-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* 当前位置标记 */
+.user-location-icon { background: transparent; border: none; }
+.user-location-dot {
+  width: 16px; height: 16px; box-sizing: border-box;
+  background: #4285f4; border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(66,133,244,0.4), 0 2px 6px rgba(0,0,0,0.3);
+}
+.user-location-dot::after {
+  content: '';
+  position: absolute; top: -8px; left: -8px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(66,133,244,0.3);
+  animation: locate-ripple 1.6s ease-out infinite;
+}
+@keyframes locate-ripple {
+  0% { transform: scale(0.4); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
 /* 地图图层切换 */
 #layer-switch {
   position: fixed; bottom: 24px; left: 12px; z-index: 1001;
@@ -210,6 +243,8 @@ body {
   #legend-btn { bottom: 16px; right: 8px; width: 36px; height: 36px; }
   #legend-panel { bottom: 60px; right: 8px; }
 
+  #locate-btn { bottom: 16px; right: 52px; width: 36px; height: 36px; font-size: 1rem; }
+
   #layer-switch { bottom: 16px; left: 8px; }
   #layer-switch button { padding: 6px 10px; font-size: 0.72rem; }
 
@@ -275,6 +310,9 @@ body {
     <div id="province-stats"></div>
   </div>
 </div>
+
+<!-- 定位按钮 -->
+<button id="locate-btn" title="定位到我的位置">🎯</button>
 
 <!-- 图例 -->
 <button id="legend-btn" title="图例">🎨</button>
@@ -729,6 +767,56 @@ document.getElementById('layer-switch').addEventListener('click', function(e) {
       });
     }
   }
+});
+
+// ========== 定位功能 ==========
+const locateBtn = document.getElementById('locate-btn');
+let userLocationMarker = null;
+let userAccuracyCircle = null;
+
+locateBtn.addEventListener('click', function() {
+  if (!navigator.geolocation) {
+    alert('您的浏览器不支持地理定位功能');
+    return;
+  }
+  locateBtn.classList.add('locating');
+  map.locate({ setView: true, maxZoom: 14, enableHighAccuracy: true, timeout: 10000 });
+});
+
+map.on('locationfound', function(e) {
+  locateBtn.classList.remove('locating');
+
+  if (userLocationMarker) map.removeLayer(userLocationMarker);
+  if (userAccuracyCircle) map.removeLayer(userAccuracyCircle);
+
+  // 精度范围圈
+  userAccuracyCircle = L.circle(e.latlng, {
+    radius: e.accuracy,
+    color: '#4285f4', fillColor: '#4285f4',
+    fillOpacity: 0.1, weight: 1
+  }).addTo(map);
+
+  // 当前位置蓝点
+  userLocationMarker = L.marker(e.latlng, {
+    icon: L.divIcon({
+      className: 'user-location-icon',
+      html: '<div class="user-location-dot"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    }),
+    zIndexOffset: 1000
+  }).addTo(map);
+
+  userLocationMarker.bindPopup('📍 您的当前位置（精度约 ' + Math.round(e.accuracy) + ' 米）').openPopup();
+});
+
+map.on('locationerror', function(e) {
+  locateBtn.classList.remove('locating');
+  let msg = '获取位置失败：' + e.message;
+  if (e.code === 1) msg = '定位权限被拒绝，请在浏览器/系统设置中允许访问位置信息';
+  else if (e.code === 2) msg = '无法获取位置信息，请检查设备定位服务是否开启';
+  else if (e.code === 3) msg = '定位超时，请重试';
+  alert(msg);
 });
 
 // ========== 初始化统计 ==========

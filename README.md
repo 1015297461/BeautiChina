@@ -10,11 +10,16 @@
 - 📋 **批次筛选** — 按第1-6批国家级传统村落名录筛选
 - 📊 **省份统计** — 侧边栏实时显示各省村落数量，点击定位
 - 📱 **移动端适配** — 兼容手机、iPad 等触屏设备
+- 🎯 **我的位置** — 一键定位当前位置并在地图上标注
 - 🎨 **多图层** — 标准地图 / 卫星影像 / 暗色主题
 
 ## 🚀 快速开始
 
-### 方式一：本地服务器（推荐）
+### 方式一：在线访问
+
+手机、平板、电脑浏览器直接打开：https://1015297461.github.io/BeautiChina/
+
+### 方式二：本地服务器
 
 ```bash
 git clone https://github.com/1015297461/BeautiChina.git
@@ -23,9 +28,9 @@ python3 -m http.server 8888
 # 浏览器打开 http://localhost:8888
 ```
 
-### 方式二：直接打开
+### 方式三：直接打开
 
-直接用浏览器打开 `index.html`（部分浏览器可能因跨域限制需使用方式一）。
+直接用浏览器打开 `index.html`（部分浏览器可能因跨域限制需使用方式二）。
 
 ## 📊 数据概览
 
@@ -58,21 +63,31 @@ python3 -m http.server 8888
 
 ```
 ├── index.html                  # 主地图页面
-├── villages_data.js            # 村落坐标数据（8,170条）
+├── villages_data.js            # 村落坐标数据（8,170条，前端加载）
 ├── villages_compact.json       # 紧凑格式村落数据
+├── villages_with_coords.json   # 完整村落数据（含地理编码元信息）
 ├── parse_villages.py           # 数据解析脚本（从Excel提取）
-├── match_coords.py             # 坐标匹配脚本（匹配经纬度）
+├── match_coords.py             # 坐标匹配脚本（匹配区县中心坐标）
+├── geocode_amap.py              # 高德API逐村精确地理编码脚本（断点续传）
+├── geocode_progress.json        # 地理编码进度记录
 ├── 工作簿13.xlsx               # 原始Excel数据
 └── .gitignore
 ```
 
 ## 🔧 数据更新
 
-如需使用更精确的坐标（高德地图API逐村地理编码）：
+村落坐标分两级精度：
 
-1. 注册[高德地图开放平台](https://lbs.amap.com/)，获取 API Key
-2. 修改 `match_coords.py` 添加高德API调用
-3. 重新运行 `python3 match_coords.py`
+- **区县中心坐标**（`match_coords.py` 生成）— 兜底坐标，所有村落初始均为此精度
+- **村级精确坐标**（`geocode_amap.py` 通过高德地图API逐村查询）— 更精确的定位
+
+如需对剩余省份继续做村级精确地理编码：
+
+1. 注册[高德地图开放平台](https://lbs.amap.com/)，获取 API Key，写入 `api.md`
+2. 修改 `geocode_amap.py` 中的 `TARGET_PROVINCES` 为目标省份列表
+3. 运行 `python3 geocode_amap.py`（支持断点续传，会自动更新 `villages_with_coords.json` / `villages_compact.json` / `villages_data.js`）
+
+地图上坐标来源 `s` 字段为 `amap_api`（精确，大实心圆）或 `county_center`（近似，小空心环）。
 
 ## 📄 数据来源
 
