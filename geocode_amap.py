@@ -17,7 +17,19 @@ JS_OUTPUT_FILE = 'villages_data.js'
 PROGRESS_FILE = 'geocode_progress.json'  # 断点续传文件
 
 # 目标省份(仅处理这些)
-TARGET_PROVINCES = ['安徽省', '浙江省', '江苏省', '上海市', '江西省']
+# 第2批(中南+东北) + 第3批(华东+华北+西北)，共21省/区/市，4325个村落
+TARGET_PROVINCES = [
+    # 中南
+    '湖南省', '广西壮族自治区', '广东省', '河南省', '湖北省', '海南省',
+    # 东北
+    '辽宁省', '吉林省', '黑龙江省',
+    # 华东(剩余)
+    '福建省', '山东省',
+    # 华北
+    '山西省', '河北省', '北京市', '天津市', '内蒙古自治区',
+    # 西北
+    '陕西省', '甘肃省', '青海省', '宁夏回族自治区', '新疆维吾尔自治区'
+]
 
 # API限制
 RATE_LIMIT_QPS = 25       # 高德QPS限制
@@ -60,7 +72,12 @@ def build_address(v):
 
     # 城市名(用于限定搜索范围)
     city_name = v.get('city', '') or v['province']
-    city_name = city_name.replace('市', '').replace('省', '').replace('自治区', '')
+    # 海南省下辖区县直属省管，"海南"作为city参数会与青海省"海南藏族自治州"冲突
+    # (ENGINE_RESPONSE_DATA_ERROR)，需保留"省"字
+    if v['province'] == '海南省' and not v.get('city'):
+        city_name = '海南省'
+    else:
+        city_name = city_name.replace('市', '').replace('省', '').replace('自治区', '')
     # 自治区等特殊处理
     if '自治州' in city_name:
         city_name = city_name.replace('自治州', '')
