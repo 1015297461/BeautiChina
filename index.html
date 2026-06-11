@@ -126,6 +126,31 @@ body {
 }
 #stats-list .stat-item .count.highlight { background: #e74c3c; }
 
+/* 我的收藏 */
+#favorites-section {
+  padding: 12px; border-bottom: 1px solid #eee;
+  max-height: 160px; overflow-y: auto;
+}
+#favorites-section h4 {
+  font-size: 0.85rem; color: #666; margin-bottom: 8px;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+#favorites-section .favorites-empty {
+  font-size: 0.78rem; color: #999; line-height: 1.6;
+}
+.favorite-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  font-size: 0.85rem; transition: background 0.15s;
+}
+.favorite-item:hover { background: #fff8e1; }
+.favorite-item .name {
+  color: #333; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.favorite-item .name small { color: #999; font-weight: normal; }
+.favorite-item .remove-fav { color: #ccc; padding: 0 4px; font-size: 0.95rem; flex-shrink: 0; }
+.favorite-item .remove-fav:hover { color: #e74c3c; }
+
 /* 图例按钮 */
 #legend-btn {
   position: fixed; bottom: 24px; right: 12px; z-index: 1001;
@@ -177,6 +202,24 @@ body {
   100% { transform: scale(1.6); opacity: 0; }
 }
 
+/* 村落标记 - 醒目效果 */
+.village-marker-precise {
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.55));
+}
+
+/* 收藏标记 */
+.favorite-marker-icon { background: transparent; border: none; }
+.favorite-marker-star {
+  font-size: 26px; line-height: 1;
+  filter: drop-shadow(0 0 3px #fff) drop-shadow(0 2px 4px rgba(0,0,0,0.45));
+  animation: favorite-bounce 1.6s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+@keyframes favorite-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.12); }
+}
+
 /* 地图图层切换 */
 #layer-switch {
   position: fixed; bottom: 24px; left: 12px; z-index: 1001;
@@ -197,6 +240,16 @@ body {
   display: inline-block; padding: 2px 8px; border-radius: 4px;
   font-size: 0.7rem; color: white; margin-top: 4px;
 }
+.village-popup .popup-footer {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap;
+}
+.fav-toggle-btn {
+  border: 1px solid #f0c040; background: #fffaf0; color: #c9960c;
+  border-radius: 12px; padding: 2px 10px; font-size: 0.75rem;
+  cursor: pointer; transition: all 0.15s; font-family: inherit;
+}
+.fav-toggle-btn:hover { background: #fff3cd; }
+.fav-toggle-btn.active { background: #f0c040; color: #fff; border-color: #e0a800; }
 .batch-1 { background: #e74c3c; }
 .batch-2 { background: #e67e22; }
 .batch-3 { background: #f1c40f; color: #333; }
@@ -304,6 +357,14 @@ body {
     </div>
   </div>
 
+  <!-- 我的收藏 -->
+  <div id="favorites-section">
+    <h4>⭐ 我的收藏 <span id="favorites-count">(0)</span></h4>
+    <div id="favorites-list">
+      <p class="favorites-empty">点击地图标记弹窗中的 ☆ 收藏村落，收藏后会在地图上以 ⭐ 醒目标注</p>
+    </div>
+  </div>
+
   <!-- 省份统计 -->
   <div id="stats-list">
     <h4>📊 各省村落数量</h4>
@@ -406,6 +467,145 @@ uniqueProvinces.forEach((p, i) => {
   provinceColors[p] = PROVINCE_COLORS_POOL[i % PROVINCE_COLORS_POOL.length];
 });
 
+// ========== 收藏功能 ==========
+const FAVORITES_KEY = 'beautichina_favorites';
+
+// full_address -> village 快速查找
+const villageByF = {};
+allVillages.forEach(v => { villageByF[v.f] = v; });
+
+let favorites = new Set();
+try {
+  favorites = new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'));
+} catch (e) {}
+
+const favoriteMarkers = {};            // f -> 收藏星标 marker
+const favoritesLayer = L.layerGroup().addTo(map); // 收藏星标始终显示在最上层
+
+function isFavorite(village) {
+  return favorites.has(village.f);
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
+  } catch (e) {}
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
+function createFavoriteMarker(village) {
+  return L.marker([village.lat, village.lng], {
+    icon: L.divIcon({
+      className: 'favorite-marker-icon',
+      html: '<div class="favorite-marker-star">⭐</div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 26]
+    }),
+    zIndexOffset: 2000
+  }).bindPopup(() => buildPopupContent(village), { maxWidth: 300 });
+}
+
+function toggleFavorite(village) {
+  if (favorites.has(village.f)) {
+    favorites.delete(village.f);
+    const m = favoriteMarkers[village.f];
+    if (m) {
+      favoritesLayer.removeLayer(m);
+      delete favoriteMarkers[village.f];
+    }
+  } else {
+    favorites.add(village.f);
+    const m = createFavoriteMarker(village);
+    favoriteMarkers[village.f] = m;
+    favoritesLayer.addLayer(m);
+  }
+  saveFavorites();
+  renderFavoritesList();
+}
+
+// 弹出窗内容(含收藏按钮，每次打开时根据最新收藏状态生成)
+function buildPopupContent(village) {
+  const batch = village.b || 1;
+  const isPrecise = village.s === 'amap_api';
+  const batchNames = {
+    1: '第一批', 2: '第二批', 3: '第三批',
+    4: '第四批', 5: '第五批', 6: '第六批'
+  };
+
+  const precisionLabel = isPrecise
+    ? '<span style="color:#27ae60;font-size:0.75rem;">📍 高德精确定位</span>'
+    : '<span style="color:#e67e22;font-size:0.75rem;">⚠️ 区县近似(待更新)</span>';
+
+  const fav = isFavorite(village);
+
+  return `
+    <div class="village-popup">
+      <h4>${village.n || village.d || village.f}</h4>
+      <div class="meta">📍 ${village.f}</div>
+      <div class="meta">🏛️ ${village.p} · ${village.c || ''} · ${village.d || ''}</div>
+      <div class="popup-footer">
+        <span class="batch-tag batch-${batch}">${batchNames[batch] || '第'+batch+'批'}</span>
+        ${precisionLabel}
+        <button class="fav-toggle-btn${fav ? ' active' : ''}" data-f="${escapeAttr(village.f)}">${fav ? '★ 已收藏' : '☆ 收藏'}</button>
+      </div>
+    </div>
+  `;
+}
+
+// 收藏列表渲染(侧边栏)
+function renderFavoritesList() {
+  const container = document.getElementById('favorites-list');
+  const countEl = document.getElementById('favorites-count');
+  countEl.textContent = `(${favorites.size})`;
+
+  if (favorites.size === 0) {
+    container.innerHTML = '<p class="favorites-empty">点击地图标记弹窗中的 ☆ 收藏村落，收藏后会在地图上以 ⭐ 醒目标注</p>';
+    return;
+  }
+
+  const items = [...favorites].map(f => villageByF[f]).filter(Boolean);
+  container.innerHTML = items.map(v => `
+    <div class="favorite-item" data-f="${escapeAttr(v.f)}">
+      <span class="name">⭐ ${v.n || v.d || v.f} <small>· ${v.p}</small></span>
+      <span class="remove-fav" title="取消收藏">✕</span>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.favorite-item').forEach(item => {
+    const f = item.dataset.f;
+    const village = villageByF[f];
+    if (!village) return;
+    item.querySelector('.name').addEventListener('click', function() {
+      map.setView([village.lat, village.lng], 15, { animate: true });
+      const m = favoriteMarkers[f];
+      if (m) setTimeout(() => m.openPopup(), 350);
+    });
+    item.querySelector('.remove-fav').addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleFavorite(village);
+    });
+  });
+}
+
+// 弹出窗中收藏按钮的点击事件(事件委托)
+map.on('popupopen', function(e) {
+  const node = e.popup._contentNode;
+  if (!node) return;
+  const btn = node.querySelector('.fav-toggle-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    const village = villageByF[btn.dataset.f];
+    if (!village) return;
+    toggleFavorite(village);
+    const fav = isFavorite(village);
+    btn.textContent = fav ? '★ 已收藏' : '☆ 收藏';
+    btn.classList.toggle('active', fav);
+  });
+});
+
 // ========== MarkerCluster 配置 ==========
 const markerClusterGroup = L.markerClusterGroup({
   maxClusterRadius: function(zoom) {
@@ -470,12 +670,12 @@ function createMarker(village) {
   let radius, weight, fillOpacity, strokeColor;
 
   if (isPrecise) {
-    // 精确坐标：越近越大，实心圆 + 白色粗边框
-    if (zoom <= 7)      { radius = 6;  weight = 2; }    // 远: 小(多聚合)
-    else if (zoom <= 9) { radius = 9;  weight = 2.5; }  // 中
-    else if (zoom <= 11){ radius = 12; weight = 3; }    // 近
-    else                { radius = 15; weight = 3.5; }  // 很近: 大
-    fillOpacity = 0.82;
+    // 精确坐标：越近越大，实心圆 + 白色粗边框 + 阴影提升辨识度
+    if (zoom <= 7)      { radius = 7;  weight = 2; }    // 远: 小(多聚合)
+    else if (zoom <= 9) { radius = 10; weight = 2.5; }  // 中
+    else if (zoom <= 11){ radius = 13; weight = 3.5; }  // 近
+    else                { radius = 17; weight = 4; }    // 很近: 大
+    fillOpacity = 0.92;
     strokeColor = '#fff';
   } else {
     // 近似坐标：越近越大，空心环
@@ -494,6 +694,7 @@ function createMarker(village) {
     color: strokeColor,
     weight: weight,
     opacity: isPrecise ? 1 : 0.45,
+    className: isPrecise ? 'village-marker-precise' : 'village-marker-approx',
     // 自定义属性(不参与Leaflet渲染)
     batch: batch,
     province: village.p,
@@ -502,25 +703,7 @@ function createMarker(village) {
     isPrecise: isPrecise
   });
 
-  // 弹出窗
-  const batchNames = {
-    1: '第一批', 2: '第二批', 3: '第三批',
-    4: '第四批', 5: '第五批', 6: '第六批'
-  };
-
-  const precisionLabel = isPrecise
-    ? '<span style="color:#27ae60;font-size:0.75rem;">📍 高德精确定位</span>'
-    : '<span style="color:#e67e22;font-size:0.75rem;">⚠️ 区县近似(待更新)</span>';
-
-  marker.bindPopup(`
-    <div class="village-popup">
-      <h4>${village.n || village.d || village.f}</h4>
-      <div class="meta">📍 ${village.f}</div>
-      <div class="meta">🏛️ ${village.p} · ${village.c || ''} · ${village.d || ''}</div>
-      <span class="batch-tag batch-${batch}">${batchNames[batch] || '第'+batch+'批'}</span>
-      ${precisionLabel}
-    </div>
-  `, { maxWidth: 300 });
+  marker.bindPopup(() => buildPopupContent(village), { maxWidth: 300 });
 
   return marker;
 }
@@ -548,10 +731,10 @@ map.on('zoomend', function() {
       const isPrecise = marker.options.isPrecise;
       let radius, weight;
       if (isPrecise) {
-        if (newZoom <= 7)      { radius = 6;  weight = 2; }
-        else if (newZoom <= 9) { radius = 9;  weight = 2.5; }
-        else if (newZoom <= 11){ radius = 12; weight = 3; }
-        else                   { radius = 15; weight = 3.5; }
+        if (newZoom <= 7)      { radius = 7;  weight = 2; }
+        else if (newZoom <= 9) { radius = 10; weight = 2.5; }
+        else if (newZoom <= 11){ radius = 13; weight = 3.5; }
+        else                   { radius = 17; weight = 4; }
       } else {
         if (newZoom <= 7)      { radius = 3;  weight = 1.5; }
         else if (newZoom <= 9) { radius = 5;  weight = 2; }
@@ -822,6 +1005,17 @@ map.on('locationerror', function(e) {
 // ========== 初始化统计 ==========
 updateViewStats();
 updateProvinceStats(allMarkers);
+
+// ========== 还原本地保存的收藏标记 ==========
+favorites.forEach(f => {
+  const v = villageByF[f];
+  if (v) {
+    const m = createFavoriteMarker(v);
+    favoriteMarkers[f] = m;
+    favoritesLayer.addLayer(m);
+  }
+});
+renderFavoritesList();
 
 // ========== 隐藏加载提示 ==========
 setTimeout(function() {
