@@ -223,7 +223,8 @@ body {
 /* 地图图层切换 */
 #layer-switch {
   position: fixed; bottom: 24px; left: 12px; z-index: 1001;
-  display: flex; gap: 4px;
+  display: flex; flex-wrap: wrap; gap: 4px;
+  max-width: calc(100vw - 24px);
 }
 #layer-switch button {
   padding: 8px 12px; border: none; border-radius: 6px;
@@ -298,7 +299,7 @@ body {
 
   #locate-btn { bottom: 16px; right: 52px; width: 36px; height: 36px; font-size: 1rem; }
 
-  #layer-switch { bottom: 16px; left: 8px; }
+  #layer-switch { bottom: 16px; left: 8px; max-width: calc(100vw - 16px); }
   #layer-switch button { padding: 6px 10px; font-size: 0.72rem; }
 
   .leaflet-control-zoom { display: none; } /* 使用手势缩放 */
@@ -391,6 +392,8 @@ body {
   <button class="active" data-layer="0">标准地图</button>
   <button data-layer="1">卫星影像</button>
   <button data-layer="2">暗色主题</button>
+  <button data-layer="3">卫星路网</button>
+  <button data-layer="4">地形图</button>
 </div>
 
 <!-- 地图容器 -->
@@ -433,6 +436,25 @@ const tileLayers = [
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '© CartoDB | 村落数据来源: 中国传统村落名录',
     maxZoom: 18
+  }),
+  // 卫星路网 - 高德卫星图 + 半透明路网/地名标注叠加层
+  L.layerGroup([
+    L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
+      subdomains: '1234',
+      attribution: '© 高德地图',
+      maxZoom: 18
+    }),
+    L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}', {
+      subdomains: '1234',
+      maxZoom: 18
+    })
+  ]),
+  // 地形图 - OpenTopoMap (含等高线与山体阴影)
+  L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    subdomains: 'abc',
+    maxZoom: 18,
+    maxNativeZoom: 17,
+    attribution: '© OpenTopoMap (CC-BY-SA) | © OpenStreetMap contributors'
   })
 ];
 
